@@ -1,0 +1,244 @@
+I. Boundary Cases (6 Scenarios)
+Scenario 1: Price Delta Boundary - Exactly 0.01 Cheaper
+Title: Candidate hotel total price is exactly one cent cheaper than the selected hotel.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel A Total Price: $199.99, Score: 4.1.
+Distance: 2 km, Inventory > 0, Active.
+Steps:
+Select the base hotel for a specific date range.
+Trigger the recommendation engine.
+Expected Result: Candidate Hotel A is included in the recommendation list because it strictly satisfies candidate_total_price < selected_total_price.
+
+Scenario 2: Price Delta Boundary - Exactly Equal Price
+Title: Candidate hotel total price is exactly equal to the selected hotel price.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel B Total Price: $200.00, Score: 4.5.
+Distance: 1 km, Inventory > 0, Active.
+Steps:
+Select the base hotel for a specific date range.
+Trigger the recommendation engine.
+Expected Result: Candidate Hotel B is excluded from the recommendation list because it fails the strict inequality rule (candidate_total_price < selected_total_price).
+
+
+
+Scenario 3: Score Delta Boundary - Exactly 0.001 Better
+Title: Candidate hotel overall score is marginally higher than the selected hotel.
+Preconditions / Data Setup:
+Selected Hotel Score: 4.125.
+Candidate Hotel C Total Price: $150.00, Score: 4.126.
+Distance: 3 km, Inventory > 0, Active.
+Steps:
+Select the base hotel and fetch recommendations.
+Expected Result: Candidate Hotel C is included. The system must support floating-point precision for scores to recognize fractional improvements.
+
+Scenario 4: Distance Boundary - Exactly 5.0 km Away
+Title: Candidate hotel is located exactly at the 5.0 km boundary threshold.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel D Total Price: $180.00, Score: 4.2.
+Distance: 5.00 km, Inventory > 0, Active.
+Steps:
+Select the base hotel and fetch recommendations.
+Expected Result: Candidate Hotel D is included. The distance constraint condition should evaluate as inclusive (distance <= 5.0 km).
+
+Scenario 5: Distance Boundary - Just Outside Threshold (5.01 km)
+Title: Candidate hotel is located just outside the 5.0 km boundary (5.01 km).
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel E Total Price: $150.00, Score: 4.8.
+Distance: 5.01 km, Inventory > 0, Active.
+Steps:
+Select the base hotel and fetch recommendations.
+Expected Result: Candidate Hotel E is excluded due to violating the strict 5 km exclusion rule (Distance > 5 km).
+Scenario 6: Inventory Boundary - Exactly 1 Room Left
+Title: Candidate hotel has only 1 room available in inventory for the selected dates.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel F Total Price: $150.00, Score: 4.2.
+Distance: 2 km, inventory_available = 1, Active.
+Steps:
+Select the base hotel for a 1-room stay request.
+Fetch recommendations.
+Expected Result: Candidate Hotel F is included because inventory_available > 0.
+
+--------------------------------------------------------------------------------------------------
+I. Negative Cases (6 Scenarios)
+Scenario 7: Exclusion of Selected Hotel Self-Match
+Title: The system evaluates the selected hotel itself against the criteria.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0, Distance: 0 km, Inventory > 0, Active.
+Steps:
+Request recommendations for the selected hotel.
+Expected Result: The selected hotel must never recommend itself under any circumstances (Exclusion Rule #1).
+Scenario 8: Exclusion of Inactive Hotels
+Title: Candidate hotel matches all criteria but its status is flagged as Inactive.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel G Total Price: $120.00, Score: 4.9, Distance: 1 km.
+status = 'Inactive', Inventory > 0.
+Steps:
+Fetch recommendations for the selected hotel.
+Expected Result: Candidate Hotel G is excluded from the final payload.
+Scenario 9: Exclusion of Sold-Out Hotels
+Title: Candidate hotel matches all criteria but has 0 inventory available.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel H Total Price: $110.00, Score: 4.7, Distance: 2 km.
+inventory_available = 0, Active.
+Steps:
+Fetch recommendations for the selected hotel.
+Expected Result: Candidate Hotel H is excluded.
+Scenario 10: Cheaper but Worse Quality
+Title: Candidate hotel is cheaper but has a lower overall score than the selected hotel.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel I Total Price: $100.00, Score: 3.9.
+Distance: 1 km, Inventory > 0, Active.
+Steps:
+Fetch recommendations for the selected hotel.
+Expected Result: Candidate Hotel I is excluded because candidate_score <= selected_score.
+Scenario 11: Better Quality but More Expensive
+Title: Candidate hotel is better in quality but costs more than the selected hotel.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel J Total Price: $250.00, Score: 4.8.
+Distance: 1 km, Inventory > 0, Active.
+Steps:
+Fetch recommendations for the selected hotel.
+Expected Result: Candidate Hotel J is excluded because it fails the "Cheaper" rule.
+Scenario 12: Missing Crucial Metadata (Null Review Score)
+Title: Candidate hotel satisfies price and distance, but has a null/missing review score.
+Preconditions / Data Setup:
+Selected Hotel Total Price: $200.00, Score: 4.0.
+Candidate Hotel K Total Price: $150.00, Star Rating: 4, Amenity Match: 80%.
+review_score = NULL, Distance: 2 km, Inventory > 0, Active.
+Steps:
+Fetch recommendations for the selected hotel.
+Expected Result: Candidate Hotel K is excluded because its overall score cannot be calculated natively, or it defaults to a broken calculation below the threshold.
+
+III. Ranking & Sorting Correctness Cases (4 Scenarios)
+Scenario 13: Sorting Tier 1 - Highest ScoreDelta Wins
+Title: Verify that candidates with higher ScoreDelta are ranked above lower ScoreDelta regardless of price.
+Preconditions / Data Setup:
+Selected Hotel Score: 4.0, Total Price: $200.00.
+Candidate H1: Score: 4.8 (ScoreDelta: 0.8), Total Price: $190.00.
+Candidate H2: Score: 4.5 (ScoreDelta: 0.5), Total Price: $120.00.
+Both are within 5 km, Active, with Inventory.
+Steps:
+Request recommendations.
+Expected Result: Candidate H1 must be positioned higher in the list than Candidate H2, because Tier 1 sorting is strictly by highest ScoreDelta.
+Scenario 14: Sorting Tier 2 - Tie-Breaker by Lowest Total Price
+Title: Verify that when ScoreDelta is identical, the hotel with the lower total price ranks higher.
+Preconditions / Data Setup:
+Selected Hotel Score: 4.0, Total Price: $200.00.
+Candidate P1: Score: 4.5 (ScoreDelta: 0.5), Total Price: $150.00.
+Candidate P2: Score: 4.5 (ScoreDelta: 0.5), Total Price: $130.00.
+Both are within 5 km, Active, with Inventory.
+Steps:
+Request recommendations.
+Expected Result: Candidate P2 must be ranked higher than Candidate P1 because $130.00 < $150.00.
+Scenario 15: Sorting Tier 3 - Tie-Breaker by Lowest Distance
+Title: Verify that when ScoreDelta and Total Price are identical, the closer hotel ranks higher.
+Preconditions / Data Setup:
+Selected Hotel Score: 4.0, Total Price: $200.00.
+Candidate D1: Score: 4.5, Total Price: $150.00, Distance: 4.2 km.
+Candidate D2: Score: 4.5, Total Price: $150.00, Distance: 1.5 km.
+Steps:
+Request recommendations.
+Expected Result: Candidate D2 must be ranked higher than Candidate D1 because 1.5 km < 4.2 km.
+Scenario 16: Sorting Tier 4 - Tie-Breaker by Highest Review Count
+Title: Verify that when ScoreDelta, Price, and Distance match, the hotel with more reviews ranks higher.
+Preconditions / Data Setup:
+Selected Hotel Score: 4.0, Total Price: $200.00.
+Candidate R1: Score: 4.5, Total Price: $150.00, Distance: 2.0 km, review_count = 120.
+Candidate R2: Score: 4.5, Total Price: $150.00, Distance: 2.0 km, review_count = 450.
+Steps:
+Request recommendations.
+Expected Result: Candidate R2 must be ranked higher than Candidate R1 because 450 > 120 reviews.
+
+IV. Data Correctness Cases (4 Scenarios)
+Scenario 17: Multi-Night Price Math Verification
+Title: Total price calculation validation for multi-night stays.
+Preconditions / Data Setup:
+Stay Duration: 4 nights.
+Candidate Hotel L Nightly Price: $40.00. Taxes/fees: $10.00 fixed per night.
+Total calculated price in DB/API should equal $200.00.
+Selected Hotel Total Price for 4 nights: $250.00.
+Steps:
+Request recommendations for a 4-night itinerary stay.
+Inspect the UI attributes for Candidate Hotel L.
+Expected Result: UI correctly reflects Nightly Price: $40.00 (or localized average including fees if per policy) and Total Price: $200.00. The comparison must use the multi-night total, not just the single night rate.
+Scenario 18: Currency Mismatch Protection
+Title: System handles situations where hotels are priced in different currencies natively.
+Preconditions / Data Setup:
+Selected Hotel Total Price: 200 EUR.
+Candidate Hotel M Total Price: 190 USD.
+Exchange rate assumption: 1 EUR = 1.10 USD (Making 200 EUR = 220 USD; 190 USD = 172 EUR).
+Steps:
+Set user currency profile to EUR.
+Trigger recommendation calculation.
+Expected Result: The system converts all candidate prices into a unified target currency before executing the comparison rules (172 EUR < 200 EUR). The UI displays the correct converted price matching the active user session currency.
+Scenario 19: Stale Inventory Mid-Session Check
+Title: A candidate hotel sells out during a user's active session before recommendations are refreshed.
+Preconditions / Data Setup:
+Candidate Hotel N is initially valid (inventory_available = 1).
+Steps:
+User views the selected hotel page.
+In the background, simulate an API call from another user booking the last room of Hotel N (inventory_available becomes 0).
+The current user clicks "View 10 Better & Cheaper Hotels" or refreshes recommendations.
+Expected Result: Hotel N is absent from the newly generated recommendation array, avoiding a bad click-through experience.
+Scenario 20: Missing Non-Crucial Amenities Calculation
+Title: System gracefully calculates amenity_match_percent when the candidate hotel has zero amenities listed.
+Preconditions / Data Setup:
+Selected Hotel Amenities: [“Wi-Fi”, “Pool”, “Gym”] (Total 3).
+Candidate Hotel O Amenities: [] (Empty list / No amenities listed).
+Candidate Hotel O Review Score: 10.0, Star Rating: 5.
+Steps:
+Request recommendations.
+Expected Result: The system does not crash due to dividing by zero or processing empty lists. It assigns an amenity_match_percent of 0%, resolves the formula metric mathematically as: $$Score = (0.5 \times 10.0) + (0.3 \times 5) + (0.2 \times 0) = 6.5$$  If $6.5 > \text{selected\_score}$, it displays the hotel successfully with "Key Amenities" left blank or showing "None available”.
+
+
+
+----------------------------------------------------------------------------------------------------------------------------
+Task B: Clarifying Questions (8 Total)
+To ensure technical alignment and accurate test coverage, the following ambiguities require clarification from Product and Engineering:
+Amenity Match Calculation: The overall score relies on amenity_match_percent. How exactly is this percentage calculated? Is it the percentage of selected hotel amenities that the candidate possesses, or is it based on a static list of "critical" user-preferred amenities?
+Review Score Edge Cases: How should the system compute the overall score if a candidate hotel is brand new and has a review score/count of NULL or 0? Should it be excluded entirely, or assigned a default baseline?
+Distance Metrics: The brief specifies a constraint of "within 5 km." Are we calculating this using strict straight-line geodesics (Haversine formula), or is it based on actual road/driving distance via a mapping API?
+Currency Normalization: When evaluating candidate hotels with differing source currencies (e.g., USD vs. INR), what is the source of truth for exchange rates, and how frequently are these cached/refreshed?
+Tie-Breaking Determinism: If two candidate hotels perfectly match across all four sorting tiers (ScoreDelta, Total Price, Distance, and Review Count), what fallback property determines their final position (e.g., unique Hotel ID, promotional weight)?
+Stale Inventory Cache: To prevent a bad user experience where a user clicks an available hotel that has just sold out, what is the maximum permissible cache TTL (Time-To-Live) for candidate inventory before forcing a real-time live check?
+Tax and Fee Inclusion: Does "Total Price" strictly mean the base room rate multiplied by nights, or must it comprehensively include localized taxes, resort fees, and service charges across all candidates?
+Star Rating Translation: The sorting rules treat star rating as a continuous numeric value (0.3 × star_rating). How do we handle half-star hotels (e.g., 4.5★) or properties that utilize non-standard alternative hospitality classifications?
+
+Part 1b — Bug Finder (Analysis of Provided Recommendations)
+Based on the authoritative recommendation rules and exclusions outlined in the product brief, there are 9 major logical, validation, and data bugs in the provided payload:
+1. Inclusion of Selected Hotel (Rank 10)
+Bug: Skyline Business Hotel is included at Rank 10.
+Rule Violated: Exclusion Rule #1 explicitly states to exclude the "Same hotel as selected."
+2. Duplicate Hotel Listing (Rank 1 and Rank 9)
+Bug: Orbit Executive Stay appears twice in the Top 10 recommendations (at Rank 1 and Rank 9) with identical attributes.
+Rule Violated: General system integrity; a single unique business identity must not occupy multiple recommendation slots.
+3. Price Mismatch - More Expensive (Rank 5)
+Bug: Zenith Inn has a total price of ₹22,400, which is more expensive than the selected hotel's price of ₹21,000. It is ironically tagged "Cheaper".
+Rule Violated: Rule 1 (Cheaper) states: candidate_total_price < selected_total_price.
+4. Currency Inconsistency (Rank 6)
+Bug: Vertex Corporate Rooms lists its price as $18,900 instead of Indian Rupees (₹). If evaluated raw as 18,900, it breaks localized rendering. If processed directly as Dollars, it is vastly more expensive than ₹21,000.
+Rule Violated: Data Correctness / Currency Normalization rules.
+5. Distance Limit Violated (Rank 3)
+Bug: Comet Residency has a distance of 5.8 km.
+Rule Violated: Exclusion Rule #4 explicitly bans any property where Distance > 5 km.
+6. Mathematically Impossible Review Score (Rank 4)
+Bug: Nexus Park Hotel lists a review score of 10.8.
+Rule Violated: Data Correctness. Review scores typically operate on a strict 1-5 or 1-10 normalized scale. A score of 10.8 indicates a backend telemetry data-corruption issue.
+7. Bad "Why Recommended" Tag (Rank 7)
+Bug: Aurora Budget Plus contains the tag "Breakfast included", but the UI design guidelines explicitly specify that this metadata field must show "Why recommended" tags derived from the algorithmic match (e.g., "Top Value", "Better Rating"), not static amenity flags.
+8. Ranking Sort Order Violation (Rank 1 vs. Rank 2)
+Bug: Assuming standard amenity matches, Metro Suites (Rank 2) is a 5★ hotel with an 8.5 review score. Its score calculations would likely yield a higher ScoreDelta than Orbit Executive Stay (Rank 1, 4★, 8.9 review score). Even if scores were tied, Metro Suites is cheaper (₹20,500 vs ₹19,800 is incorrect, but its distance is 1.4 km vs 2.1 km), indicating that Tier 2/Tier 3 sorting logic failed.
+9. Lack of Minimum Quality Threshold / Lower Star Rating (Rank 7)
+Bug: Aurora Budget Plus is a 3★ hotel, while the selected hotel is a 4★ hotel.
+Rule Violated: While the brief defines "Better" mathematically using a composite formula, displaying a lower star tier with sparse reviews (90 count) often breaks user expectations of a quality "upgrade" unless its amenity match percent is anomalously near 100%.
+
+
